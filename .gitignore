@@ -1,7 +1,10 @@
 venv/
 .env
+.streamlit/secrets.toml
 __pycache__/
 *.pyc
 data/raw/
 *.csv
 *.parquet
+migrate.py
+debug.py
