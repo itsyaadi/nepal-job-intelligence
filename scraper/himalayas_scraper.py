@@ -95,5 +95,5 @@ def save_to_db(jobs):
 
 
 if __name__ == "__main__":
-    jobs = scrape_jobs(max_pages=5)
+    jobs = scrape_jobs(max_pages=20)
     save_to_db(jobs)

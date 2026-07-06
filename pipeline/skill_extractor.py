@@ -9,27 +9,30 @@ from database.queries import get_engine
 # Master skills list
 SKILLS = {
     "technical": [
-        "python", "java", "javascript", "typescript", "c++", "c#", "php", "ruby",
-        "swift", "kotlin", "go", "rust", "scala", "r", "matlab",
+        "python", "java", "javascript", "typescript", "php", "ruby",
+        "swift", "kotlin", "scala", "matlab",
         "html", "css", "react", "angular", "vue", "node.js", "django", "flask",
         "spring", "laravel", "express", "fastapi",
         "sql", "mysql", "postgresql", "mongodb", "redis", "elasticsearch",
         "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "linux",
         "machine learning", "deep learning", "nlp", "computer vision",
         "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy",
-        "power bi", "tableau", "excel", "git", "rest api", "graphql"
+        "power bi", "tableau", "excel", "git", "rest api", "graphql",
+        "data analysis", "data science", "business intelligence",
+        "selenium", "postman", "jira", "confluence", "figma"
     ],
     "soft": [
         "communication", "teamwork", "leadership", "problem solving",
         "critical thinking", "time management", "project management",
-        "agile", "scrum", "jira", "confluence"
+        "agile", "scrum"
     ],
     "domain": [
-        "accounting", "finance", "marketing", "sales", "hr", "operations",
+        "accounting", "finance", "marketing", "sales", "operations",
         "supply chain", "logistics", "healthcare", "education", "legal",
-        "customer service", "business analysis", "data analysis"
+        "customer service", "business analysis", "human resources"
     ]
 }
+
 
 def extract_skills(text):
     if not text:
@@ -38,10 +41,15 @@ def extract_skills(text):
     text_lower = text.lower()
     found = []
 
+    # Skills that need strict whole-word matching
+    strict_match = [
+        "r", "go", "c#", "c++", "java", "scala", "ruby", "rust",
+        "hr", "sql", "css", "git", "aws", "gcp"
+    ]
+
     for category, skill_list in SKILLS.items():
         for skill in skill_list:
-            # Use word boundary for short/common words to avoid false matches
-            if len(skill) <= 3 or skill in ['go', 'r', 'c#', 'c++']:
+            if skill in strict_match:
                 pattern = r'\b' + re.escape(skill) + r'\b'
                 if re.search(pattern, text_lower):
                     found.append((skill, category))

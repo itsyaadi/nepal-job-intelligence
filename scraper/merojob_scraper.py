@@ -16,11 +16,34 @@ BASE_URL = "https://merojob.com/search/?q=&page={}"
 
 def get_driver():
     options = webdriver.ChromeOptions()
-    options.add_argument('--headless')  # runs in background
+    options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--window-size=1920,1080')
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+
+def scrape_job_description(driver, url):
+    try:
+        driver.get(url)
+        time.sleep(3)
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        # Try common description containers
+        for selector in ['job-description', 'description', 'job-detail', 'job_description']:
+            desc = soup.find('div', class_=lambda c: c and selector in c.lower())
+            if desc:
+                return desc.get_text(separator=' ', strip=True)[:2000]
+
+        # Fallback — grab all paragraph text
+        paragraphs = soup.find_all('p')
+        text = ' '.join(p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30)
+        return text[:2000] if text else None
+
+    except Exception as e:
+        print(f"⚠️ Could not fetch description: {e}")
+        return None
+
 
 def parse_jobs(soup):
     jobs = []
@@ -29,25 +52,20 @@ def parse_jobs(soup):
 
     for link in job_links:
         try:
-            # Title
             title_span = link.find('span', class_='text-blue-900')
             title = title_span.text.strip() if title_span else link.text.strip()
 
-            # Go up to card level
             card = link.find_parent('div', class_=re.compile('rounded-lg'))
 
-            # Company
             company = None
             company_link = card.find('a', href=re.compile('/employer/')) if card else None
             if company_link:
                 company_span = company_link.find('span', class_='text-sm')
                 company = company_span.text.strip() if company_span else company_link.text.strip()
 
-            # Location
             location = "Nepal"
             if card:
                 all_text = card.get_text(separator='|')
-                # look for common Nepal locations
                 nepal_locations = ['Kathmandu', 'Lalitpur', 'Bhaktapur', 'Pokhara',
                                    'Chitwan', 'Biratnagar', 'Butwal', 'Hetauda']
                 for loc in nepal_locations:
@@ -55,9 +73,7 @@ def parse_jobs(soup):
                         location = loc
                         break
 
-            # Remote check
             is_remote = 'remote' in (title + (company or '')).lower()
-
             source_url = "https://merojob.com" + link['href']
 
             if title:
@@ -86,6 +102,7 @@ def scrape_jobs(max_pages=5):
     all_jobs = []
     driver = get_driver()
 
+    # Step 1: scrape all listing pages
     for page in range(1, max_pages + 1):
         url = BASE_URL.format(page)
         print(f"🔍 Scraping page {page}: {url}")
@@ -109,6 +126,13 @@ def scrape_jobs(max_pages=5):
             print(f"❌ Error on page {page}: {e}")
             continue
 
+    # Step 2: fetch full description for each job
+    print(f"\n📄 Fetching descriptions for {len(all_jobs)} jobs...")
+    for i, job in enumerate(all_jobs):
+        print(f"  [{i+1}/{len(all_jobs)}] {job['title']}")
+        job['description'] = scrape_job_description(driver, job['source_url'])
+        time.sleep(2)
+
     driver.quit()
     print(f"\n🎉 Total jobs scraped: {len(all_jobs)}")
     return all_jobs
@@ -121,28 +145,34 @@ def save_to_db(jobs):
 
     engine = get_engine()
     saved = 0
+    updated = 0
 
     with engine.connect() as conn:
         for job in jobs:
             try:
-                conn.execute(text("""
+                # Try insert first
+                result = conn.execute(text("""
                     INSERT INTO jobs (title, company, location, job_type,
                         salary_min, salary_max, description, source,
                         source_url, posted_at, scraped_at, is_remote)
                     VALUES (:title, :company, :location, :job_type,
                         :salary_min, :salary_max, :description, :source,
                         :source_url, :posted_at, :scraped_at, :is_remote)
-                    ON CONFLICT (source_url) DO NOTHING
+                    ON CONFLICT (source_url) DO UPDATE
+                        SET description = EXCLUDED.description,
+                            scraped_at = EXCLUDED.scraped_at
+                    RETURNING id
                 """), job)
-                saved += 1
+                if result.fetchone():
+                    saved += 1
             except Exception as e:
                 print(f"⚠️ Skipping: {e}")
                 continue
         conn.commit()
 
-    print(f"✅ Saved {saved} new jobs to database!")
+    print(f"✅ Saved/updated {saved} jobs in database!")
 
 
 if __name__ == "__main__":
-    jobs = scrape_jobs(max_pages=5)
+    jobs = scrape_jobs(max_pages=20)
     save_to_db(jobs)
