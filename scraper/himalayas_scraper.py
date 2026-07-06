@@ -42,7 +42,7 @@ def scrape_jobs(max_pages=5):
                         "salary_max": j.get('maxSalary'),
                         "description": j.get('excerpt'),
                         "source": "himalayas",
-                        "source_url": f"https://himalayas.app/jobs/{j.get('companySlug')}/{j.get('slug')}",
+                        "source_url": f"https://himalayas.app/jobs/company/{j.get('companySlug')}",
                         "posted_at": datetime.now(),
                         "scraped_at": datetime.now(),
                         "is_remote": True
